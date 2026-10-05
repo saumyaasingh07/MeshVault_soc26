@@ -11,7 +11,17 @@ runner = CliRunner()
 
 def test_cli_split_command_success():
     result = runner.invoke(
-        app, ["split", "--threshold", "3", "--shares", "5", "--interface", "eth0"]
+        app,
+        [
+            "split",
+            "--threshold",
+            "3",
+            "--shares",
+            "5",
+            "--interface",
+            "eth0",
+            "--no-dashboard",
+        ],
     )
     assert result.exit_code == 0
     assert "MeshVault Command Line Interface" in result.output
@@ -20,12 +30,30 @@ def test_cli_split_command_success():
     assert "Interface: eth0" in result.output
 
 
+def test_cli_split_command_dashboard():
+    result = runner.invoke(
+        app,
+        ["split", "--threshold", "3", "--shares", "5", "--interface", "eth0"],
+    )
+    assert result.exit_code == 0
+    assert "MeshVault P2P Dashboard" in result.output
+
+
 def test_cli_recover_command_success():
-    result = runner.invoke(app, ["recover", "-k", "3", "-p", "5050"])
+    result = runner.invoke(
+        app, ["recover", "-k", "3", "-p", "5050", "--no-dashboard"]
+    )
     assert result.exit_code == 0
     assert "MeshVault Command Line Interface" in result.output
     assert "Command selected: recover" in result.output
     assert "Threshold (K): 3, Port: 5050" in result.output
+
+
+def test_cli_recover_command_dashboard():
+    result = runner.invoke(app, ["recover", "-k", "3", "-p", "5050"])
+    assert result.exit_code == 0
+    assert "MeshVault P2P Dashboard" in result.output
+
 
 
 def test_cli_completion_bash():
