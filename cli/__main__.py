@@ -1,6 +1,6 @@
 """
-MeshVault CLI Entrypoint with Interactive Terminal UI Dashboard.
-Issue #10 Implementation.
+MeshVault CLI Entrypoint with Typer framework, Shell Auto-completion, and Interactive Terminal UI Dashboard.
+Issue #10 and Issue #18 Combined Implementation.
 """
 
 import sys
@@ -9,6 +9,7 @@ import traceback
 from typing import Optional
 import typer
 
+from cli.config import load_config
 from cli.dashboard import PeerDashboard
 
 app = typer.Typer(
@@ -23,6 +24,24 @@ class CLIState:
 
 
 state = CLIState()
+
+
+def complete_interface(incomplete: str):
+    """Dynamically complete network interface names."""
+    interfaces = ["eth0", "wlan0", "lo", "en0", "adapter"]
+    return [i for i in interfaces if i.startswith(incomplete)]
+
+
+def complete_alias(incomplete: str):
+    """Dynamically complete peer aliases from config file."""
+    try:
+        cfg = load_config()
+        aliases = list(cfg.get("peers", {}).values()) + list(
+            cfg.get("peers", {}).keys()
+        )
+        return [a for a in aliases if a.startswith(incomplete)]
+    except Exception:
+        return []
 
 
 def handle_error(e: Exception):
@@ -71,6 +90,7 @@ def split(
         None,
         "-i",
         "--interface",
+        autocompletion=complete_interface,
         help="Network interface to use (e.g. eth0, wlan0)",
     ),
     live_dashboard: bool = typer.Option(
@@ -116,6 +136,8 @@ def split(
             typer.echo("MeshVault Command Line Interface")
             typer.echo("Command selected: split")
             typer.echo(f"Threshold (K): {threshold}, Shares (N): {shares}")
+            if interface:
+                typer.echo(f"Interface: {interface}")
     except Exception as e:
         handle_error(e)
 
@@ -138,6 +160,7 @@ def recover(
         None,
         "-i",
         "--interface",
+        autocompletion=complete_interface,
         help="Network interface to listen on",
     ),
     live_dashboard: bool = typer.Option(
@@ -169,8 +192,74 @@ def recover(
             typer.echo("MeshVault Command Line Interface")
             typer.echo("Command selected: recover")
             typer.echo(f"Threshold (K): {threshold}, Port: {port}")
+            if interface:
+                typer.echo(f"Interface: {interface}")
     except Exception as e:
         handle_error(e)
+
+
+@app.command()
+def completion(
+    shell: str = typer.Argument(
+        ...,
+        help="Target shell for completion script (bash, zsh, fish, powershell)",
+    ),
+):
+    """Output auto-completion configuration script for specified shell."""
+    shell_lower = shell.lower()
+    if shell_lower == "bash":
+        typer.echo(
+            "# MeshVault Bash Completion\n"
+            "_meshvault_completion() {\n"
+            '    local cur="${COMP_WORDS[COMP_CWORD]}"\n'
+            '    local prev="${COMP_WORDS[COMP_CWORD-1]}"\n'
+            '    case "$prev" in\n'
+            "        -i|--interface)\n"
+            '            COMPREPLY=( $(compgen -W "eth0 wlan0 lo en0" -- "$cur") )\n'
+            "            return 0\n"
+            "            ;;\n"
+            "    esac\n"
+            '    COMPREPLY=( $(compgen -W "split recover --threshold --shares --secret --interface --debug --help" -- "$cur") )\n'
+            "}\n"
+            "complete -F _meshvault_completion meshvault"
+        )
+    elif shell_lower == "zsh":
+        typer.echo(
+            "#compdef meshvault\n"
+            "# MeshVault Zsh Completion\n"
+            "_meshvault() {\n"
+            "    local -a commands\n"
+            "    commands=(\n"
+            '        "split:Split a secret and distribute shares to LAN peers"\n'
+            '        "recover:Collect shares from LAN peers and recover the secret"\n'
+            '        "completion:Output auto-completion configuration script"\n'
+            "    )\n"
+            '    _describe -t commands "meshvault command" commands\n'
+            "}\n"
+            '_meshvault "$@"'
+        )
+    elif shell_lower == "fish":
+        typer.echo(
+            "# MeshVault Fish Completion\n"
+            "complete -c meshvault -f\n"
+            'complete -c meshvault -n "__fish_use_subcommand" -a "split recover completion"'
+        )
+    elif shell_lower == "powershell":
+        typer.echo(
+            "# MeshVault PowerShell Completion\n"
+            "Register-ArgumentCompleter -Native -CommandName meshvault -ScriptBlock {\n"
+            "    param($wordToComplete, $commandAst, $cursorPosition)\n"
+            '    $subcommands = @("split", "recover", "completion")\n'
+            '    $subcommands | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_) }\n'
+            "}"
+        )
+    else:
+        typer.secho(
+            f"Error: Unsupported shell '{shell}'. Supported: bash, zsh, fish, powershell",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
 
 def main():
@@ -182,3 +271,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
